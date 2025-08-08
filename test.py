@@ -223,7 +223,7 @@ BASE_TMPL = """
         {% endif %}
       {% endwith %}
 
-      {{ content }}
+      {{ content|safe }}
     </div>
   </body>
 </html>
@@ -233,7 +233,7 @@ BASE_TMPL = """
 @app.route('/')
 def index():
     current_company = get_current_company()
-    content = """
+    content = render_template_string("""
     <div class="p-4 bg-white rounded shadow-sm">
       <h3>Welcome</h3>
       {% if current_company %}
@@ -250,7 +250,7 @@ def index():
         <p><a class="btn btn-primary" href="{{ url_for('companies') }}">Companies</a></p>
       {% endif %}
     </div>
-    """
+    """, current_company=current_company)
     return render_template_string(BASE_TMPL, content=content, current_company=current_company)
 
 # --- Company management ---
