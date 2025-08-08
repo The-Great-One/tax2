@@ -120,37 +120,29 @@ def ensure_company_selected():
     if not co:
         return redirect(url_for('select_company'))
 
+def safe_date(year: int, month: int, day: int) -> date:
+    """Return a valid date, adjusting day to month end when necessary."""
+    try:
+        return date(year, month, day)
+    except ValueError:
+        if month == 12:
+            next_month = date(year + 1, 1, 1)
+        else:
+            next_month = date(year, month + 1, 1)
+        return next_month - timedelta(days=1)
+
 # Fiscal year range for a company for a reference date
 def get_fiscal_year_dates(company: Company, ref_date: date = None):
     if not ref_date:
         ref_date = date.today()
     ms = int(company.fy_start_month)
     ds = int(company.fy_start_day)
-    # Build candidate start date in current calendar year
-    try:
-        start_this_year = date(ref_date.year, ms, ds)
-    except ValueError:
-        # handle invalid day (e.g., Feb 30) — use last day of month
-        # compute by trying next month day 1 minus 1
-        if ms == 12:
-            next_month = date(ref_date.year+1,1,1)
-        else:
-            next_month = date(ref_date.year, ms+1, 1)
-        start_this_year = next_month - timedelta(days=1)
+    start_this_year = safe_date(ref_date.year, ms, ds)
     if ref_date >= start_this_year:
         start = start_this_year
-        end = date(start.year+1, ms, ds) - timedelta(days=1)
     else:
-        # fiscal start was last calendar year
-        try:
-            start = date(ref_date.year-1, ms, ds)
-        except ValueError:
-            if ms == 12:
-                next_month = date(ref_date.year,1,1)
-            else:
-                next_month = date(ref_date.year-1, ms+1, 1)
-            start = next_month - timedelta(days=1)
-        end = date(start.year+1, ms, ds) - timedelta(days=1)
+        start = safe_date(ref_date.year - 1, ms, ds)
+    end = safe_date(start.year + 1, ms, ds) - timedelta(days=1)
     return start, end
 
 # Balance for an account up to an optional date
@@ -231,7 +223,7 @@ BASE_TMPL = """
         {% endif %}
       {% endwith %}
 
-      {{ content }}
+      {{ content|safe }}
     </div>
   </body>
 </html>
@@ -241,7 +233,7 @@ BASE_TMPL = """
 @app.route('/')
 def index():
     current_company = get_current_company()
-    content = """
+    content = render_template_string("""
     <div class="p-4 bg-white rounded shadow-sm">
       <h3>Welcome</h3>
       {% if current_company %}
@@ -258,7 +250,7 @@ def index():
         <p><a class="btn btn-primary" href="{{ url_for('companies') }}">Companies</a></p>
       {% endif %}
     </div>
-    """
+    """, current_company=current_company)
     return render_template_string(BASE_TMPL, content=content, current_company=current_company)
 
 # --- Company management ---
@@ -1207,6 +1199,8 @@ def backup_company():
     return send_file(zip_buffer, as_attachment=True, download_name=fname, mimetype='application/zip')
 
 # ---------- Run ----------
-if __name__ == '__main__':
+with app.app_context():
     init_db()
+
+if __name__ == '__main__':
     app.run(debug=True, port=5000)
